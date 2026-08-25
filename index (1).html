@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Room Status</title>
+
+<!--
+  ROOM STATUS DISPLAY — configuration
+  ======================================
+  1. Add one entry per room to the ROOMS object below.
+     - key: a short URL slug, lowercase, no spaces (e.g. "fellowship")
+     - name: the display name shown on screen
+     - ics: the room's Planning Center calendar feed URL.
+            Copy it from the room's page in Planning Center Calendar:
+            Actions > Share > Subscription link.
+            Change "webcal://" to "https://" (this file also does that
+            conversion automatically if you paste it as-is).
+
+  2. On each tablet, open this page with ?room=<slug> in the URL, e.g.:
+       https://yoursite.example/index.html?room=fellowship
+     Each tablet gets its own URL — same file, different query string.
+
+  3. Host this single file anywhere that serves static files over HTTPS
+     (GitHub Pages, Netlify, Cloudflare Pages, a school/church web host,
+     etc. — all have free tiers). No server code, no database, no
+     recurring software cost.
+
+  4. On the tablet, use a free kiosk-lock browser (e.g. "Fully Kiosk
+     Browser" on Android) pointed at the tablet's URL, in full-screen
+     mode, with "keep screen on" enabled.
+-->
+<script>
+  const ROOMS = {
+    fellowship: {
+      name: "Fellowship",
+      ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamJqzWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBPlBjV5934674211cbd118ccf4e19ee055dbcc173baea2"
+    }
+    // Add more rooms here, one entry per room, e.g.:
+    // sanctuary: { name: "Sanctuary", ics: "webcal://..." },
+    // youth:     { name: "Youth Room", ics: "webcal://..." },
+  };
+
+  // How much of the day the timeline rail shows (24hr clock hours).
+  const TIMELINE_START_HOUR = 7;
+  const TIMELINE_END_HOUR = 22;
+
+  // How often to re-fetch the feed and refresh the display.
+  const REFRESH_MINUTES = 5;
+</script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg:            #17140F;
+    --panel:         #221E17;
+    --panel-line:    #382F22;
+    --brass:         #C9A24E;
+    --brass-dim:     #7A6636;
+    --cream:         #F3ECDD;
+    --muted:         #948A76;
+    --sage:          #85A388;
+    --sage-dim:      #2B3630;
+    --clay:          #BD6A45;
+    --clay-dim:      #3A2820;
+  }
+
+  *{ box-sizing: border-box; margin:0; padding:0; }
+
+  html,body{
+    height:100%;
+    background:var(--bg);
+    color:var(--cream);
+    font-family:'Work Sans', sans-serif;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  body{
+    display:flex;
+    padding: 4vh 4vw;
+    gap: 4vw;
+  }
+
+  /* faint room texture: warm vignette, evokes wood-panelled hall light */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background:
+      radial-gradient(ellipse at 20% 15%, rgba(201,162,78,0.07), transparent 55%),
+      radial-gradient(ellipse at 100% 100%, rgba(133,163,136,0.05), transparent 50%);
+    pointer-events:none;
+  }
+
+  /* ---------- LEFT: identity + status ---------- */
+  .left{
+    flex: 0 0 38%;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    min-width:0;
+  }
+
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    font-size:clamp(0.7rem, 1vw, 0.9rem);
+    color:var(--muted);
+  }
+
+  .room-name{
+    font-family:'Fraunces', serif;
+    font-optical-sizing:auto;
+    font-weight:500;
+    font-size:clamp(2.4rem, 6.5vw, 5.2rem);
+    line-height:1.02;
+    color:var(--cream);
+    margin-top:0.4em;
+    word-break:break-word;
+  }
+
+  .status-block{
+    margin-top:6vh;
+  }
+
+  .status-row{
+    display:flex;
+    align-items:center;
+    gap:0.9rem;
+  }
+
+  .status-dot{
+    width:1.1rem; height:1.1rem;
+    border-radius:50%;
+    flex:none;
+    position:relative;
+  }
+  .status-dot::after{
+    content:"";
+    position:absolute; inset:-0.55rem;
+    border-radius:50%;
+    opacity:0.35;
+    animation:breathe 3.6s ease-in-out infinite;
+  }
+  .status-dot.available{ background:var(--sage); }
+  .status-dot.available::after{ background:var(--sage); }
+  .status-dot.occupied{ background:var(--clay); }
+  .status-dot.occupied::after{ background:var(--clay); }
+
+  @keyframes breathe{
+    0%,100%{ transform:scale(0.85); opacity:0.28; }
+    50%{ transform:scale(1.15); opacity:0.5; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .status-dot::after{ animation:none; opacity:0.35; }
+  }
+
+  .status-word{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:clamp(1.6rem, 3.4vw, 2.6rem);
+  }
+  .status-word.available{ color:var(--sage); }
+  .status-word.occupied{ color:var(--clay); }
+
+  .status-detail{
+    margin-top:0.6rem;
+    font-size:clamp(0.95rem, 1.3vw, 1.15rem);
+    color:var(--muted);
+    padding-left: calc(1.1rem + 0.9rem);
+  }
+  .status-detail strong{ color:var(--cream); font-weight:500; }
+
+  .clock{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:clamp(1rem, 1.6vw, 1.3rem);
+    color:var(--muted);
+    letter-spacing:0.02em;
+  }
+  .clock strong{ color:var(--brass); font-weight:500; }
+
+  .sync-note{
+    margin-top:0.6rem;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem;
+    color:var(--brass-dim);
+    letter-spacing:0.04em;
+  }
+
+  /* ---------- RIGHT: timeline rail ---------- */
+  .right{
+    flex:1 1 auto;
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .right-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.78rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:1.4vh;
+    flex:none;
+  }
+
+  .rail-wrap{
+    position:relative;
+    flex:1 1 auto;
+    min-height:0;
+    display:flex;
+  }
+
+  .rail{
+    position:relative;
+    width:3px;
+    flex:none;
+    background:var(--panel-line);
+    border-radius:2px;
+    margin-right:2.2rem;
+  }
+
+  .rail-hour{
+    position:absolute;
+    left:-4px;
+    width:11px; height:11px;
+    border-radius:50%;
+    background:var(--bg);
+    border:2px solid var(--panel-line);
+  }
+  .rail-hour-label{
+    position:absolute;
+    left:1.1rem;
+    transform:translateY(-50%);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.68rem;
+    color:var(--brass-dim);
+  }
+
+  .rail-now{
+    position:absolute;
+    left:-7px;
+    width:17px; height:17px;
+    border-radius:50%;
+    background:var(--brass);
+    box-shadow:0 0 0 4px rgba(201,162,78,0.22), 0 0 14px rgba(201,162,78,0.55);
+    z-index:5;
+  }
+
+  .events-col{
+    flex:1 1 auto;
+    position:relative;
+    overflow-y:auto;
+  }
+
+  .event-block{
+    position:absolute;
+    left:0; right:0;
+    border-radius:10px;
+    padding:0.55rem 1rem;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    background:var(--panel);
+    border-left:3px solid var(--brass-dim);
+    min-height: 2.6rem;
+  }
+  .event-block .t{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    color:var(--brass);
+    letter-spacing:0.03em;
+  }
+  .event-block .s{
+    font-size:clamp(0.85rem, 1.15vw, 1.05rem);
+    color:var(--cream);
+    font-weight:500;
+    margin-top:0.1rem;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .event-block.current{
+    border-left-color:var(--clay);
+    background:var(--clay-dim);
+  }
+  .event-block.current .t{ color:var(--clay); }
+
+  .empty-note{
+    color:var(--muted);
+    font-size:1rem;
+    align-self:center;
+    margin:auto;
+  }
+
+  .error-note{
+    color:var(--clay);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.85rem;
+    margin:auto;
+    text-align:center;
+    max-width:26rem;
+    line-height:1.5;
+  }
+
+  @media (max-aspect-ratio: 4/5){
+    body{ flex-direction:column; }
+    .left{ flex:none; }
+    .status-block{ margin-top:3vh; }
+    .right{ margin-top:3vh; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="left">
+    <div>
+      <div class="eyebrow" id="today-label">—</div>
+      <div class="room-name" id="room-name">Loading…</div>
+    </div>
+
+    <div class="status-block">
+      <div class="status-row">
+        <div class="status-dot available" id="status-dot"></div>
+        <div class="status-word available" id="status-word">Checking…</div>
+      </div>
+      <div class="status-detail" id="status-detail"></div>
+      <div class="clock" id="clock" style="margin-top:2.2rem;"></div>
+      <div class="sync-note" id="sync-note"></div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="right-head">
+      <span>Today's schedule</span>
+      <span id="range-label"></span>
+    </div>
+    <div class="rail-wrap">
+      <div class="rail" id="rail"></div>
+      <div class="events-col" id="events-col"></div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const params = new URLSearchParams(location.search);
+  const roomKey = params.get('room') || Object.keys(ROOMS)[0];
+  const room = ROOMS[roomKey];
+
+  const roomNameEl   = document.getElementById('room-name');
+  const todayLabelEl = document.getElementById('today-label');
+  const statusDotEl  = document.getElementById('status-dot');
+  const statusWordEl = document.getElementById('status-word');
+  const statusDetail = document.getElementById('status-detail');
+  const clockEl      = document.getElementById('clock');
+  const syncNoteEl   = document.getElementById('sync-note');
+  const railEl       = document.getElementById('rail');
+  const eventsColEl  = document.getElementById('events-col');
+  const rangeLabelEl = document.getElementById('range-label');
+
+  if(!room){
+    roomNameEl.textContent = 'No room configured';
+    statusDetail.innerHTML = 'Add ?room=&lt;slug&gt; to the URL, matching a key in the ROOMS config at the top of this file.';
+    return;
+  }
+  roomNameEl.textContent = room.name;
+
+  function toHttps(url){
+    return url.replace(/^webcal:\/\//i, 'https://');
+  }
+
+  const feedUrl = toHttps(room.ics);
+
+  // Public CORS proxies, tried in order. Planning Center's calendar
+  // subdomain does not send CORS headers, so a browser can't fetch it
+  // directly from a page hosted on a different domain.
+  const PROXIES = [
+    { name:'direct',      wrap: url => url },
+    { name:'allorigins',  wrap: url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url) },
+    { name:'corsproxy.io',wrap: url => 'https://corsproxy.io/?url=' + encodeURIComponent(url) },
+    { name:'codetabs',    wrap: url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url) },
+    { name:'thingproxy',  wrap: url => 'https://thingproxy.freeboard.io/fetch/' + url },
+  ];
+
+  let lastErrorDetail = '';
+
+  async function fetchICS(){
+    const attempts = [];
+    for(const proxy of PROXIES){
+      try{
+        const res = await fetch(proxy.wrap(feedUrl), {cache:'no-store'});
+        if(!res.ok){ attempts.push(proxy.name + ': HTTP ' + res.status); continue; }
+        const text = await res.text();
+        if(text.includes('BEGIN:VCALENDAR')) return text;
+        attempts.push(proxy.name + ': got response but no VCALENDAR (len ' + text.length + ')');
+      }catch(e){
+        attempts.push(proxy.name + ': ' + (e.message || e));
+      }
+    }
+    lastErrorDetail = attempts.join(' | ');
+    throw new Error(lastErrorDetail);
+  }
+
+  // --- Minimal ICS parser: unfolds lines, reads VEVENT blocks ---
+  function parseICS(text){
+    const lines = text.split(/\r\n|\n|\r/);
+    const unfolded = [];
+    for(const line of lines){
+      if(/^[ \t]/.test(line) && unfolded.length){
+        unfolded[unfolded.length-1] += line.slice(1);
+      }else{
+        unfolded.push(line);
+      }
+    }
+
+    const events = [];
+    let cur = null;
+    for(const line of unfolded){
+      if(line === 'BEGIN:VEVENT'){ cur = {}; continue; }
+      if(line === 'END:VEVENT'){ if(cur) events.push(cur); cur = null; continue; }
+      if(!cur) continue;
+      const idx = line.indexOf(':');
+      if(idx === -1) continue;
+      const rawKey = line.slice(0, idx);
+      const value = line.slice(idx+1);
+      const key = rawKey.split(';')[0];
+      if(key === 'SUMMARY') cur.summary = unescapeICS(value);
+      if(key === 'DTSTART'){ cur.start = parseICSDate(rawKey, value); cur.startAllDay = rawKey.includes('VALUE=DATE') && !rawKey.includes('DATE-TIME'); }
+      if(key === 'DTEND'){ cur.end = parseICSDate(rawKey, value); }
+      if(key === 'LOCATION') cur.location = unescapeICS(value);
+    }
+    return events.filter(e => e.start && e.summary);
+  }
+
+  function unescapeICS(s){
+    return s.replace(/\\n/gi,' ').replace(/\\,/g,',').replace(/\\;/g,';').replace(/\\\\/g,'\\');
+  }
+
+  function parseICSDate(rawKey, value){
+    // All-day: YYYYMMDD
+    if(/^\d{8}$/.test(value)){
+      const y = +value.slice(0,4), m = +value.slice(4,6)-1, d = +value.slice(6,8);
+      return new Date(y, m, d, 0, 0, 0);
+    }
+    // Timestamp: YYYYMMDDTHHMMSS or with Z
+    const m = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
+    if(!m) return null;
+    const [, y, mo, d, h, mi, s, z] = m;
+    if(z === 'Z'){
+      return new Date(Date.UTC(+y, +mo-1, +d, +h, +mi, +s));
+    }
+    // Treat as local time (Planning Center feeds are typically in the
+    // account/room's local timezone already).
+    return new Date(+y, +mo-1, +d, +h, +mi, +s);
+  }
+
+  function sameDay(a,b){
+    return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+  }
+
+  function fmtTime(d){
+    return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+  }
+
+  function minutesSinceMidnight(d){
+    return d.getHours()*60 + d.getMinutes() + d.getSeconds()/60;
+  }
+
+  let allEvents = [];
+  let lastSync = null;
+
+  async function refresh(){
+    try{
+      const text = await fetchICS();
+      allEvents = parseICS(text);
+      lastSync = new Date();
+      syncNoteEl.textContent = 'Synced ' + fmtTime(lastSync);
+      render();
+    }catch(err){
+      renderError();
+    }
+  }
+
+  function todaysEvents(){
+    const now = new Date();
+    return allEvents
+      .filter(e => sameDay(e.start, now) || (e.end && e.start < now && e.end > new Date(now.getFullYear(),now.getMonth(),now.getDate())))
+      .sort((a,b) => a.start - b.start);
+  }
+
+  function render(){
+    const now = new Date();
+    todayLabelEl.textContent = now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
+    clockEl.innerHTML = '<strong>' + fmtTime(now) + '</strong>';
+
+    const today = todaysEvents();
+    const current = today.find(e => e.start <= now && e.end && e.end > now);
+
+    if(current){
+      statusDotEl.className = 'status-dot occupied';
+      statusWordEl.className = 'status-word occupied';
+      statusWordEl.textContent = 'In Use';
+      statusDetail.innerHTML = '<strong>' + escapeHTML(current.summary) + '</strong><br>Until ' + fmtTime(current.end);
+    }else{
+      statusDotEl.className = 'status-dot available';
+      statusWordEl.className = 'status-word available';
+      statusWordEl.textContent = 'Available';
+      const next = today.find(e => e.start > now);
+      statusDetail.innerHTML = next
+        ? 'Next: <strong>' + escapeHTML(next.summary) + '</strong> at ' + fmtTime(next.start)
+        : 'No further bookings today';
+    }
+
+    renderTimeline(today, now, current);
+  }
+
+  function escapeHTML(s){
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function renderTimeline(today, now, current){
+    railEl.innerHTML = '';
+    eventsColEl.innerHTML = '';
+
+    const startMin = TIMELINE_START_HOUR*60;
+    const endMin = TIMELINE_END_HOUR*60;
+    const span = endMin - startMin;
+    rangeLabelEl.textContent = TIMELINE_START_HOUR%12||12 + (TIMELINE_START_HOUR<12?'AM':'PM') + ' – ' + (TIMELINE_END_HOUR%12||12) + (TIMELINE_END_HOUR<12?'AM':'PM');
+
+    function pct(min){
+      return Math.min(100, Math.max(0, (min-startMin)/span*100));
+    }
+
+    for(let h=TIMELINE_START_HOUR; h<=TIMELINE_END_HOUR; h+=3){
+      const p = pct(h*60);
+      const dot = document.createElement('div');
+      dot.className = 'rail-hour';
+      dot.style.top = p+'%';
+      railEl.appendChild(dot);
+      const label = document.createElement('div');
+      label.className = 'rail-hour-label';
+      label.style.top = p+'%';
+      const hh = h%12||12;
+      label.textContent = hh + (h<12?'a':'p');
+      railEl.appendChild(label);
+    }
+
+    const nowMin = minutesSinceMidnight(now);
+    if(nowMin >= startMin && nowMin <= endMin){
+      const dot = document.createElement('div');
+      dot.className = 'rail-now';
+      dot.style.top = pct(nowMin)+'%';
+      railEl.appendChild(dot);
+    }
+
+    if(!today.length){
+      const note = document.createElement('div');
+      note.className = 'empty-note';
+      note.textContent = 'Nothing scheduled today';
+      eventsColEl.appendChild(note);
+      return;
+    }
+
+    today.forEach(e => {
+      const sMin = Math.max(startMin, minutesSinceMidnight(e.start));
+      const eMin = e.end ? Math.min(endMin, minutesSinceMidnight(e.end)) : sMin+30;
+      const top = pct(sMin);
+      const height = Math.max(4, pct(eMin) - pct(sMin));
+
+      const block = document.createElement('div');
+      block.className = 'event-block' + (e === current ? ' current' : '');
+      block.style.top = top+'%';
+      block.style.height = height+'%';
+
+      const t = document.createElement('div');
+      t.className = 't';
+      t.textContent = e.startAllDay ? 'All day' : (fmtTime(e.start) + '–' + (e.end?fmtTime(e.end):''));
+      const s = document.createElement('div');
+      s.className = 's';
+      s.textContent = e.summary;
+
+      block.appendChild(t);
+      block.appendChild(s);
+      eventsColEl.appendChild(block);
+    });
+  }
+
+  function renderError(){
+    statusWordEl.textContent = 'Unavailable';
+    statusWordEl.className = 'status-word';
+    statusWordEl.style.color = 'var(--muted)';
+    statusDetail.textContent = 'Could not load the schedule.';
+    syncNoteEl.textContent = lastSync ? ('Last synced ' + fmtTime(lastSync)) : 'Never synced';
+    eventsColEl.innerHTML = '';
+    const note = document.createElement('div');
+    note.className = 'error-note';
+    note.innerHTML = 'Couldn\'t reach the calendar feed. Will retry automatically.<br><br>' +
+      '<span style="font-size:0.65rem; opacity:0.75; word-break:break-word;">' + escapeHTML(lastErrorDetail) + '</span>';
+    eventsColEl.appendChild(note);
+  }
+
+  // Tick the clock every second; re-render fully every 30s so the
+  // "now" marker and current/next event stay accurate without waiting
+  // a full refresh cycle.
+  setInterval(() => { if(allEvents.length || lastSync) render(); }, 30000);
+  setInterval(() => {
+    if(!lastSync) return;
+    clockEl.innerHTML = '<strong>' + fmtTime(new Date()) + '</strong>';
+  }, 1000);
+
+  refresh();
+  setInterval(refresh, REFRESH_MINUTES*60000);
+})();
+</script>
+</body>
+</html>
