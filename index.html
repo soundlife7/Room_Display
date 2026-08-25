@@ -382,23 +382,30 @@
   // subdomain does not send CORS headers, so a browser can't fetch it
   // directly from a page hosted on a different domain.
   const PROXIES = [
-    url => url, // try direct first, in case it's ever allowed
-    url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
-    url => 'https://corsproxy.io/?url=' + encodeURIComponent(url),
+    { name:'direct',      wrap: url => url },
+    { name:'allorigins',  wrap: url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url) },
+    { name:'corsproxy.io',wrap: url => 'https://corsproxy.io/?url=' + encodeURIComponent(url) },
+    { name:'codetabs',    wrap: url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url) },
+    { name:'thingproxy',  wrap: url => 'https://thingproxy.freeboard.io/fetch/' + url },
   ];
 
+  let lastErrorDetail = '';
+
   async function fetchICS(){
-    let lastErr;
-    for(const wrap of PROXIES){
+    const attempts = [];
+    for(const proxy of PROXIES){
       try{
-        const res = await fetch(wrap(feedUrl), {cache:'no-store'});
-        if(!res.ok) throw new Error('HTTP ' + res.status);
+        const res = await fetch(proxy.wrap(feedUrl), {cache:'no-store'});
+        if(!res.ok){ attempts.push(proxy.name + ': HTTP ' + res.status); continue; }
         const text = await res.text();
         if(text.includes('BEGIN:VCALENDAR')) return text;
-        throw new Error('Unexpected response');
-      }catch(e){ lastErr = e; }
+        attempts.push(proxy.name + ': got response but no VCALENDAR (len ' + text.length + ')');
+      }catch(e){
+        attempts.push(proxy.name + ': ' + (e.message || e));
+      }
     }
-    throw lastErr || new Error('Could not load feed');
+    lastErrorDetail = attempts.join(' | ');
+    throw new Error(lastErrorDetail);
   }
 
   // --- Minimal ICS parser: unfolds lines, reads VEVENT blocks ---
@@ -596,7 +603,8 @@
     eventsColEl.innerHTML = '';
     const note = document.createElement('div');
     note.className = 'error-note';
-    note.textContent = 'Couldn\'t reach the calendar feed. Check the tablet\'s Wi-Fi connection. Will retry automatically.';
+    note.innerHTML = 'Couldn\'t reach the calendar feed. Will retry automatically.<br><br>' +
+      '<span style="font-size:0.65rem; opacity:0.75; word-break:break-word;">' + escapeHTML(lastErrorDetail) + '</span>';
     eventsColEl.appendChild(note);
   }
 
