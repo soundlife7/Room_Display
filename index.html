@@ -13,9 +13,9 @@
      - name: the display name shown on screen
      - ics: the room's Planning Center calendar feed URL.
             Copy it from the room's page in Planning Center Calendar:
-            Actions > Share > Subscription link.
-            Change "webcal://" to "https://" (this file also does that
-            conversion automatically if you paste it as-is).
+            Actions > Share > Subscription link, using the copy button
+            (typing/pasting it by hand risks a transcription error).
+            "webcal://" links are converted to "https://" automatically.
 
   2. On each tablet, open this page with ?room=<slug> in the URL, e.g.:
        https://yoursite.example/index.html?room=fellowship
@@ -29,6 +29,14 @@
   4. On the tablet, use a free kiosk-lock browser (e.g. "Fully Kiosk
      Browser" on Android) pointed at the tablet's URL, in full-screen
      mode, with "keep screen on" enabled.
+
+  FONT NOTE: this page requests "Avenir" first, since that's what was
+  asked for, but Avenir is a commercial font that is not installed on
+  Android and can't be pulled from a free font CDN. It will silently
+  fall back to Poppins (a free, visually similar geometric sans) on
+  your tablets. If you own a licensed Avenir web-font file, it can be
+  self-hosted and this will pick it up automatically — ask if you'd
+  like help wiring that in.
 -->
 <script>
   const ROOMS = {
@@ -41,9 +49,8 @@
     // youth:     { name: "Youth Room", ics: "webcal://..." },
   };
 
-  // How much of the day the timeline rail shows (24hr clock hours).
-  const TIMELINE_START_HOUR = 7;
-  const TIMELINE_END_HOUR = 22;
+  // How many upcoming events to list (soonest first).
+  const UPCOMING_COUNT = 6;
 
   // How often to re-fetch the feed and refresh the display.
   const REFRESH_MINUTES = 5;
@@ -57,7 +64,7 @@
 </script>
 
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
 
   :root{
     --bg:            #17140F;
@@ -71,6 +78,11 @@
     --sage-dim:      #2B3630;
     --clay:          #BD6A45;
     --clay-dim:      #3A2820;
+
+    /* "Avenir" is requested first for anyone who self-hosts a licensed
+       copy; Poppins is the free fallback that actually renders on
+       Android, since Avenir itself isn't available there. */
+    --font-main: 'Avenir', 'Poppins', 'Century Gothic', sans-serif;
   }
 
   *{ box-sizing: border-box; margin:0; padding:0; }
@@ -79,7 +91,7 @@
     height:100%;
     background:var(--bg);
     color:var(--cream);
-    font-family:'Work Sans', sans-serif;
+    font-family:var(--font-main);
     overflow:hidden;
     -webkit-font-smoothing:antialiased;
   }
@@ -110,19 +122,19 @@
   }
 
   .eyebrow{
-    font-family:'IBM Plex Mono', monospace;
-    letter-spacing:0.18em;
+    font-family:var(--font-main);
+    font-weight:600;
+    letter-spacing:0.14em;
     text-transform:uppercase;
     font-size:clamp(0.7rem, 1vw, 0.9rem);
     color:var(--muted);
   }
 
   .room-name{
-    font-family:'Fraunces', serif;
-    font-optical-sizing:auto;
-    font-weight:500;
+    font-family:var(--font-main);
+    font-weight:600;
     font-size:clamp(2.4rem, 6.5vw, 5.2rem);
-    line-height:1.02;
+    line-height:1.05;
     color:var(--cream);
     margin-top:0.4em;
     word-break:break-word;
@@ -166,8 +178,8 @@
   }
 
   .status-word{
-    font-family:'Fraunces', serif;
-    font-weight:600;
+    font-family:var(--font-main);
+    font-weight:700;
     font-size:clamp(1.6rem, 3.4vw, 2.6rem);
   }
   .status-word.available{ color:var(--sage); }
@@ -179,25 +191,26 @@
     color:var(--muted);
     padding-left: calc(1.1rem + 0.9rem);
   }
-  .status-detail strong{ color:var(--cream); font-weight:500; }
+  .status-detail strong{ color:var(--cream); font-weight:600; }
 
   .clock{
-    font-family:'IBM Plex Mono', monospace;
+    font-family:var(--font-main);
+    font-weight:500;
     font-size:clamp(1rem, 1.6vw, 1.3rem);
     color:var(--muted);
-    letter-spacing:0.02em;
+    letter-spacing:0.01em;
   }
-  .clock strong{ color:var(--brass); font-weight:500; }
+  .clock strong{ color:var(--brass); font-weight:600; }
 
   .sync-note{
     margin-top:0.6rem;
-    font-family:'IBM Plex Mono', monospace;
+    font-family:var(--font-main);
     font-size:0.7rem;
     color:var(--brass-dim);
-    letter-spacing:0.04em;
+    letter-spacing:0.02em;
   }
 
-  /* ---------- RIGHT: timeline rail ---------- */
+  /* ---------- RIGHT: upcoming events ---------- */
   .right{
     flex:1 1 auto;
     min-width:0;
@@ -206,114 +219,98 @@
   }
 
   .right-head{
-    display:flex;
-    justify-content:space-between;
-    align-items:baseline;
-    font-family:'IBM Plex Mono', monospace;
+    font-family:var(--font-main);
+    font-weight:600;
     font-size:0.78rem;
     letter-spacing:0.14em;
     text-transform:uppercase;
     color:var(--muted);
-    margin-bottom:1.4vh;
+    margin-bottom:2vh;
     flex:none;
   }
 
-  .rail-wrap{
-    position:relative;
+  .agenda-wrap{
     flex:1 1 auto;
     min-height:0;
-    display:flex;
-  }
-
-  .rail{
-    position:relative;
-    width:3px;
-    flex:none;
-    background:var(--panel-line);
-    border-radius:2px;
-    margin-right:2.2rem;
-  }
-
-  .rail-hour{
-    position:absolute;
-    left:-4px;
-    width:11px; height:11px;
-    border-radius:50%;
-    background:var(--bg);
-    border:2px solid var(--panel-line);
-  }
-  .rail-hour-label{
-    position:absolute;
-    left:1.1rem;
-    transform:translateY(-50%);
-    font-family:'IBM Plex Mono', monospace;
-    font-size:0.68rem;
-    color:var(--brass-dim);
-  }
-
-  .rail-now{
-    position:absolute;
-    left:-7px;
-    width:17px; height:17px;
-    border-radius:50%;
-    background:var(--brass);
-    box-shadow:0 0 0 4px rgba(201,162,78,0.22), 0 0 14px rgba(201,162,78,0.55);
-    z-index:5;
-  }
-
-  .events-col{
-    flex:1 1 auto;
-    position:relative;
     overflow-y:auto;
   }
 
-  .event-block{
+  .agenda-list{
+    position:relative;
+    padding-left:1.7rem;
+  }
+  .agenda-list::before{
+    content:"";
     position:absolute;
-    left:0; right:0;
-    border-radius:10px;
-    padding:0.55rem 1rem;
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
-    background:var(--panel);
-    border-left:3px solid var(--brass-dim);
-    min-height: 2.6rem;
+    left:0.34rem;
+    top:0.5rem;
+    bottom:0.5rem;
+    width:2px;
+    background:var(--panel-line);
   }
-  .event-block .t{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:0.72rem;
-    color:var(--brass);
+
+  .agenda-item{
+    position:relative;
+    padding:0 0 1.6rem 0.9rem;
+  }
+  .agenda-item:last-child{ padding-bottom:0; }
+  .agenda-item::before{
+    content:"";
+    position:absolute;
+    left:-1.36rem;
+    top:0.3rem;
+    width:12px; height:12px;
+    border-radius:50%;
+    background:var(--bg);
+    border:2px solid var(--brass-dim);
+  }
+  .agenda-item.current::before{
+    background:var(--clay);
+    border-color:var(--clay);
+    box-shadow:0 0 0 4px rgba(189,106,69,0.22);
+  }
+
+  .agenda-when{
+    font-family:var(--font-main);
+    font-weight:600;
+    font-size:0.78rem;
     letter-spacing:0.03em;
+    color:var(--brass);
+    display:flex;
+    gap:0.5rem;
+    align-items:baseline;
+    flex-wrap:wrap;
   }
-  .event-block .s{
-    font-size:clamp(0.85rem, 1.15vw, 1.05rem);
-    color:var(--cream);
-    font-weight:500;
-    margin-top:0.1rem;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-  }
-  .event-block.current{
-    border-left-color:var(--clay);
+  .agenda-item.current .agenda-when{ color:var(--clay); }
+  .agenda-when .now-tag{
+    font-size:0.68rem;
+    font-weight:700;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
     background:var(--clay-dim);
+    color:var(--clay);
+    padding:0.1rem 0.45rem;
+    border-radius:1rem;
   }
-  .event-block.current .t{ color:var(--clay); }
+
+  .agenda-title{
+    font-family:var(--font-main);
+    font-weight:500;
+    font-size:clamp(1rem, 1.3vw, 1.2rem);
+    color:var(--cream);
+    margin-top:0.2rem;
+  }
 
   .empty-note{
     color:var(--muted);
     font-size:1rem;
-    align-self:center;
-    margin:auto;
+    font-family:var(--font-main);
   }
 
   .error-note{
     color:var(--clay);
-    font-family:'IBM Plex Mono', monospace;
+    font-family:var(--font-main);
     font-size:0.85rem;
-    margin:auto;
-    text-align:center;
-    max-width:26rem;
     line-height:1.5;
   }
 
@@ -345,13 +342,9 @@
   </div>
 
   <div class="right">
-    <div class="right-head">
-      <span>Today's schedule</span>
-      <span id="range-label"></span>
-    </div>
-    <div class="rail-wrap">
-      <div class="rail" id="rail"></div>
-      <div class="events-col" id="events-col"></div>
+    <div class="right-head">Upcoming</div>
+    <div class="agenda-wrap">
+      <div class="agenda-list" id="agenda-list"></div>
     </div>
   </div>
 
@@ -368,9 +361,7 @@
   const statusDetail = document.getElementById('status-detail');
   const clockEl      = document.getElementById('clock');
   const syncNoteEl   = document.getElementById('sync-note');
-  const railEl       = document.getElementById('rail');
-  const eventsColEl  = document.getElementById('events-col');
-  const rangeLabelEl = document.getElementById('range-label');
+  const agendaListEl = document.getElementById('agenda-list');
 
   if(!room){
     roomNameEl.textContent = 'No room configured';
@@ -385,9 +376,9 @@
 
   const feedUrl = toHttps(room.ics);
 
-  // Public CORS proxies, tried in order. Planning Center's calendar
-  // subdomain does not send CORS headers, so a browser can't fetch it
-  // directly from a page hosted on a different domain.
+  // Public CORS proxies, tried in order (after MY_PROXY, if set).
+  // Planning Center's calendar subdomain does not send CORS headers,
+  // so a browser can't fetch it directly from a page on another domain.
   const PROXIES = [];
   if(MY_PROXY){
     PROXIES.push({ name:'your-proxy', wrap: url => MY_PROXY.replace(/\/$/,'') + '/?url=' + encodeURIComponent(url) });
@@ -480,8 +471,12 @@
     return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
   }
 
-  function minutesSinceMidnight(d){
-    return d.getHours()*60 + d.getMinutes() + d.getSeconds()/60;
+  function dayLabel(d, now){
+    if(sameDay(d, now)) return 'Today';
+    const tmr = new Date(now);
+    tmr.setDate(tmr.getDate()+1);
+    if(sameDay(d, tmr)) return 'Tomorrow';
+    return d.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
   }
 
   let allEvents = [];
@@ -499,20 +494,17 @@
     }
   }
 
-  function todaysEvents(){
-    const now = new Date();
-    return allEvents
-      .filter(e => sameDay(e.start, now) || (e.end && e.start < now && e.end > new Date(now.getFullYear(),now.getMonth(),now.getDate())))
-      .sort((a,b) => a.start - b.start);
-  }
-
   function render(){
     const now = new Date();
     todayLabelEl.textContent = now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
     clockEl.innerHTML = '<strong>' + fmtTime(now) + '</strong>';
 
-    const today = todaysEvents();
-    const current = today.find(e => e.start <= now && e.end && e.end > now);
+    // Events still in progress or yet to start, soonest first.
+    const upcoming = allEvents
+      .filter(e => e.end ? e.end > now : e.start > now)
+      .sort((a,b) => a.start - b.start);
+
+    const current = upcoming.find(e => e.start <= now && e.end && e.end > now);
 
     if(current){
       statusDotEl.className = 'status-dot occupied';
@@ -523,13 +515,13 @@
       statusDotEl.className = 'status-dot available';
       statusWordEl.className = 'status-word available';
       statusWordEl.textContent = 'Available';
-      const next = today.find(e => e.start > now);
+      const next = upcoming.find(e => e.start > now);
       statusDetail.innerHTML = next
         ? 'Next: <strong>' + escapeHTML(next.summary) + '</strong> at ' + fmtTime(next.start)
-        : 'No further bookings today';
+        : 'No further bookings scheduled';
     }
 
-    renderTimeline(today, now, current);
+    renderAgenda(upcoming.slice(0, UPCOMING_COUNT), now, current);
   }
 
   function escapeHTML(s){
@@ -538,70 +530,46 @@
     return d.innerHTML;
   }
 
-  function renderTimeline(today, now, current){
-    railEl.innerHTML = '';
-    eventsColEl.innerHTML = '';
+  function renderAgenda(events, now, current){
+    agendaListEl.innerHTML = '';
 
-    const startMin = TIMELINE_START_HOUR*60;
-    const endMin = TIMELINE_END_HOUR*60;
-    const span = endMin - startMin;
-    rangeLabelEl.textContent = TIMELINE_START_HOUR%12||12 + (TIMELINE_START_HOUR<12?'AM':'PM') + ' – ' + (TIMELINE_END_HOUR%12||12) + (TIMELINE_END_HOUR<12?'AM':'PM');
-
-    function pct(min){
-      return Math.min(100, Math.max(0, (min-startMin)/span*100));
-    }
-
-    for(let h=TIMELINE_START_HOUR; h<=TIMELINE_END_HOUR; h+=3){
-      const p = pct(h*60);
-      const dot = document.createElement('div');
-      dot.className = 'rail-hour';
-      dot.style.top = p+'%';
-      railEl.appendChild(dot);
-      const label = document.createElement('div');
-      label.className = 'rail-hour-label';
-      label.style.top = p+'%';
-      const hh = h%12||12;
-      label.textContent = hh + (h<12?'a':'p');
-      railEl.appendChild(label);
-    }
-
-    const nowMin = minutesSinceMidnight(now);
-    if(nowMin >= startMin && nowMin <= endMin){
-      const dot = document.createElement('div');
-      dot.className = 'rail-now';
-      dot.style.top = pct(nowMin)+'%';
-      railEl.appendChild(dot);
-    }
-
-    if(!today.length){
+    if(!events.length){
       const note = document.createElement('div');
       note.className = 'empty-note';
-      note.textContent = 'Nothing scheduled today';
-      eventsColEl.appendChild(note);
+      note.textContent = 'No upcoming events on the calendar';
+      agendaListEl.appendChild(note);
       return;
     }
 
-    today.forEach(e => {
-      const sMin = Math.max(startMin, minutesSinceMidnight(e.start));
-      const eMin = e.end ? Math.min(endMin, minutesSinceMidnight(e.end)) : sMin+30;
-      const top = pct(sMin);
-      const height = Math.max(4, pct(eMin) - pct(sMin));
+    events.forEach(e => {
+      const item = document.createElement('div');
+      item.className = 'agenda-item' + (e === current ? ' current' : '');
 
-      const block = document.createElement('div');
-      block.className = 'event-block' + (e === current ? ' current' : '');
-      block.style.top = top+'%';
-      block.style.height = height+'%';
+      const when = document.createElement('div');
+      when.className = 'agenda-when';
 
-      const t = document.createElement('div');
-      t.className = 't';
-      t.textContent = e.startAllDay ? 'All day' : (fmtTime(e.start) + '–' + (e.end?fmtTime(e.end):''));
-      const s = document.createElement('div');
-      s.className = 's';
-      s.textContent = e.summary;
+      const dayText = document.createElement('span');
+      dayText.textContent = dayLabel(e.start, now);
+      when.appendChild(dayText);
 
-      block.appendChild(t);
-      block.appendChild(s);
-      eventsColEl.appendChild(block);
+      const timeText = document.createElement('span');
+      timeText.textContent = e.startAllDay ? 'All day' : (fmtTime(e.start) + '–' + (e.end ? fmtTime(e.end) : ''));
+      when.appendChild(timeText);
+
+      if(e === current){
+        const tag = document.createElement('span');
+        tag.className = 'now-tag';
+        tag.textContent = 'Now';
+        when.appendChild(tag);
+      }
+
+      const title = document.createElement('div');
+      title.className = 'agenda-title';
+      title.textContent = e.summary;
+
+      item.appendChild(when);
+      item.appendChild(title);
+      agendaListEl.appendChild(item);
     });
   }
 
@@ -611,17 +579,16 @@
     statusWordEl.style.color = 'var(--muted)';
     statusDetail.textContent = 'Could not load the schedule.';
     syncNoteEl.textContent = lastSync ? ('Last synced ' + fmtTime(lastSync)) : 'Never synced';
-    eventsColEl.innerHTML = '';
+    agendaListEl.innerHTML = '';
     const note = document.createElement('div');
     note.className = 'error-note';
     note.innerHTML = 'Couldn\'t reach the calendar feed. Will retry automatically.<br><br>' +
       '<span style="font-size:0.65rem; opacity:0.75; word-break:break-word;">' + escapeHTML(lastErrorDetail) + '</span>';
-    eventsColEl.appendChild(note);
+    agendaListEl.appendChild(note);
   }
 
-  // Tick the clock every second; re-render fully every 30s so the
-  // "now" marker and current/next event stay accurate without waiting
-  // a full refresh cycle.
+  // Tick the clock every second; re-render fully every 30s so "Now" and
+  // the current/next event stay accurate without waiting a full refresh.
   setInterval(() => { if(allEvents.length || lastSync) render(); }, 30000);
   setInterval(() => {
     if(!lastSync) return;
