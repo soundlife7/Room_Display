@@ -47,6 +47,13 @@
 
   // How often to re-fetch the feed and refresh the display.
   const REFRESH_MINUTES = 5;
+
+  // OPTIONAL BUT RECOMMENDED: after deploying worker.js to Cloudflare
+  // Workers (see the comments in that file), paste your Worker's URL
+  // here. It will be tried first, before any public fallback proxies,
+  // and is far more reliable than the free public ones.
+  // Example: 'https://ics-proxy.yourname.workers.dev'
+  const MY_PROXY = 'https://ics-proxy.stauroo.workers.dev';
 </script>
 
 <style>
@@ -381,13 +388,17 @@
   // Public CORS proxies, tried in order. Planning Center's calendar
   // subdomain does not send CORS headers, so a browser can't fetch it
   // directly from a page hosted on a different domain.
-  const PROXIES = [
+  const PROXIES = [];
+  if(MY_PROXY){
+    PROXIES.push({ name:'your-proxy', wrap: url => MY_PROXY.replace(/\/$/,'') + '/?url=' + encodeURIComponent(url) });
+  }
+  PROXIES.push(
     { name:'direct',      wrap: url => url },
     { name:'allorigins',  wrap: url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url) },
     { name:'corsproxy.io',wrap: url => 'https://corsproxy.io/?url=' + encodeURIComponent(url) },
     { name:'codetabs',    wrap: url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url) },
     { name:'thingproxy',  wrap: url => 'https://thingproxy.freeboard.io/fetch/' + url },
-  ];
+  );
 
   let lastErrorDetail = '';
 
