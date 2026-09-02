@@ -40,13 +40,18 @@
 -->
 <script>
   const ROOMS = {
-    fellowship: {
-      name: "Fellowship",
-      ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamJqzWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBPlBjV5904674211cbd118ccf4e19ee055dbcc173baea2"
-    }
-    // Add more rooms here, one entry per room, e.g.:
-    // sanctuary: { name: "Sanctuary", ics: "webcal://..." },
-    // youth:     { name: "Youth Room", ics: "webcal://..." },
+    "room-1": { name: "Room 1", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamFqwWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBPxxjWfbe32e1ce6dfaea8cccd70484aa98d33d7a9e08d" },
+    "room-2": { name: "Room 2", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamFmyWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBQLhjYc8537c643c4818192923b05dcdf50f4f3ccaa0fc" },
+    "room-3": { name: "Room 3", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamBuwWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBOlxjQ864de2b608c0c23512454a173978bae619ff45fd" },
+    "room-4": { name: "Room 4", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamBuyWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBOyhjR189db1aa88accbd1e38419fc4f8b08f1f5ec7d2e" },
+    "room-5": { name: "Room 5", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamBuxWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBO_RjS6395ec382ffa5b9507e2f0778add0cf312864818" },
+    "room-6": { name: "Room 6", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamJuwWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBPYxjU81597ad638fa0b2a8064ee075d25e21a88304abf" },
+    "nursery-a": { name: "Nursery A", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamBmxWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBOyRjR43e222fcec7063bf04fa6d611d83ba3eb987d1b2" },
+    "nursery-b": { name: "Nursery B", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamBuzWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBPMBjT14aa3d44f1ce827a634d51ae395d5cd8bc8a47c2" },
+    "conference-room": { name: "Conference Room", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5paWBiwWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBOyxjRe797eafb315e20a58552ca4862f316681bb38554" },
+    "family-room": { name: "Family Room", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamFuwWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBQLxjYfee5dddead230a79bd33ecaf2db421bce7688b6f" },
+    "kitchen": { name: "Kitchen", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamFqyWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBP-hjX749952ef00b69235e293f3195396cf06fd556828" },
+    "fellowship": { name: "Fellowship Room", ics: "webcal://calendar.planningcenteronline.com/icals/eJxj4ajmsGLLz2RyeGHFlVqcX1AC4pdmMrP2GVixF-V6KnGbG5pamJqzWbG5hlixl5V4KvEl5uTEl2TmphazWXOGWHEXJBYl5hYD9bEXJwKVFKe4AYk8NwBPlBjV5904674211cbd118ccf4e19ee055dbcc173baea2" },
   };
 
   // How many upcoming events to list (soonest first).
@@ -79,10 +84,8 @@
     --clay:          #BD6A45;
     --clay-dim:      #3A2820;
 
-    /* "Avenir" is requested first for anyone who self-hosts a licensed
-       copy; Poppins is the free fallback that actually renders on
-       Android, since Avenir itself isn't available there. */
-    --font-main: 'Avenir', 'Poppins', 'Century Gothic', sans-serif;
+    /* Poppins: closest free match to the requested Avenir look. */
+    --font-main: 'Poppins', 'Century Gothic', sans-serif;
   }
 
   *{ box-sizing: border-box; margin:0; padding:0; }
